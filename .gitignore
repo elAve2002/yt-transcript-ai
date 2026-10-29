@@ -1,0 +1,60 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment secrets
+.env
+
+# Modelos de IA locales descargados (no subir a GitHub)
+# Pesos / checkpoints
+*.gguf
+*.ggml
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.npz
+*.mlmodel
+*.mlpackage
+*.tflite
+*.msgpack
+*.ot
+
+# Modelos whisper.cpp (ggml-*.bin, ggml-model-*.bin, for-tests-*.bin, etc.)
+*.bin
+
+# Carpetas típicas de descarga / caché de modelos
+models--*/
+.huggingface/
+.hf_cache/
+cache/
+*.cache/
+
+# Directorios de build de whisper.cpp (artefactos compilados)
+whisper/build/
+whisper/**/build/
+
+# Medios y salidas generadas (audio, vídeo, subtítulos locales)
+basura/
+salida/
+*.wav
+*.mp4
+*.webm
+*.mkv
+*.mp3
+*.m4a
+*.flac
+*.srt
+*.vtt
+
+# macOS
+.DS_Store

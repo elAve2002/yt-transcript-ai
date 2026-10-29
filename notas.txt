@@ -1,0 +1,27 @@
+=========================================YT_dlp=========================================
+python descargadorYT_2.py <URL> <calidad> [--audio] [--output RUTA]
+========================================PYANNOTE========================================
+
+/Users/natalio/Desktop/Guion voces/pyannote
+
+python3 pruebaV1.py -t "$PYANNOTE_KEY" -a "/Users/natalio/Desktop/Guion voces/hola123.wav"
+
+========================================WHISPER========================================
+
+build whisper:
+'/Users/natalio/Desktop/Guion voces/whisper/build/bin/whisper-cli'
+
+ruta del modelo de whisper:
+'/Users/natalio/Desktop/Guion voces/whisper/models/ggml-large-v3.bin'
+
+Ejemplo 
+
+Idioma automático:
+./build/bin/whisper-cli -m models/ggml-large-v3.bin -f entrada.wav -l auto > salida.txt
+
+Idioma español forzado:
+./build/bin/whisper-cli -m models/ggml-large-v3.bin -f entrada.wav --task transcribe -l es > salida.txt
+
+Uso de hilos:
+./build/bin/whisper-cli -m models/ggml-large-v3.bin -f entrada.wav --task transcribe -l es --threads 4
+
