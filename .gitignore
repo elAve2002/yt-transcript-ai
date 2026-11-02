@@ -46,6 +46,8 @@ whisper/**/build/
 # Medios y salidas generadas (audio, vídeo, subtítulos locales)
 basura/
 salida/
+temporales/
+logs/
 *.wav
 *.mp4
 *.webm

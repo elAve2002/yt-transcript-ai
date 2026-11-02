@@ -9,15 +9,32 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "pyannote-audio>=4.0.7",
+    "PySide6-Essentials==6.12.0",
+    "qtawesome==1.4.2",
     "torch>=2.13.0",
     "torchaudio>=2.11.0",
+    "torchcodec>=0.17.0",
     "torchvision>=0.28.0",
-    "yt-dlp>=2026.7.4",
+    "yt-dlp>=2026.10.26",
 ]
 
 [project.scripts]
-guion-voces = "guion_voces:main"
+guion-voces = "app.main:main"
+gui = "app.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0,<10",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "app"
+module-root = "."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
