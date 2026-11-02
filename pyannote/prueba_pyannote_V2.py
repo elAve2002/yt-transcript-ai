@@ -7,10 +7,12 @@ from pyannote.audio.pipelines.utils.hook import ProgressHook
 def main():
     # 1. Configurar el parser de argumentos
     parser = argparse.ArgumentParser(description="Diarización de audio con pyannote optimizado para Apple Silicon (M5).")
-    parser.add_argument("-t", "--token", required=True, help="Tu token de acceso de Hugging Face.")
+    parser.add_argument("-t", "--token", default=os.environ.get('PYANNOTE_KEY'), help="Tu token de acceso de Hugging Face.")
     parser.add_argument("-a", "--audio", required=True, help="Ruta al archivo de audio que querés procesar.")
     
     args = parser.parse_args()
+    if not args.token:
+        parser.error("Debés proporcionar un token con -t/--token o definir la variable de entorno PYANNOTE_KEY.")
 
     print(f"Cargando pipeline para el archivo: {args.audio}...")
 
