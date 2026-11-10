@@ -21,7 +21,7 @@ También podés iniciarla con:
 uv run python -m app
 ```
 
-Se usa **PySide6-Essentials 6.12.0**: incluye Qt Widgets bajo el namespace `PySide6` y evita descargar WebEngine y otros módulos que la app no necesita. Su wheel macOS es `cp310-abi3`, compatible con Python 3.14 en Apple Silicon. Los iconos los provee **qtawesome 1.4.2**.
+Se usa **PySide6-Essentials 6.12.0**: incluye Qt Widgets bajo el namespace `PySide6` y evita descargar WebEngine y otros módulos que la app no necesita. Sus wheels `abi3` son compatibles con Python 3.14 en macOS y Windows. Los iconos los provee **qtawesome 1.4.2**.
 
 ### Pantallas
 
@@ -31,9 +31,9 @@ Se usa **PySide6-Essentials 6.12.0**: incluye Qt Widgets bajo el namespace `PySi
 - **Actualizaciones:** versiones instaladas/disponibles, estados, selección múltiple, confirmación con comandos y log de la instalación. Las consultas son concurrentes y tienen caché de 10 minutos.
 - **Ajustes:** tema sistema/claro/oscuro, color de acento y token de Hugging Face enmascarado, con prueba de identidad y acceso al modelo.
 
-La ventana usa una sidebar, tarjetas, estados vacíos, spinners y toasts. Guarda geometría, tema, modelo, calidad, idioma y carpeta mediante `QSettings`. Atajos: **⌘O** para abrir un archivo local, **⌘Enter** para procesar y **⌘,** para Ajustes.
+La ventana usa una sidebar, tarjetas, estados vacíos, spinners y toasts. Guarda geometría, tema, modelo, calidad, idioma y carpeta mediante `QSettings`. Atajos: **Cmd/Ctrl+O** para abrir un archivo local, **Cmd/Ctrl+Enter** para procesar y **Cmd/Ctrl+,** para Ajustes; Qt selecciona el modificador apropiado en cada sistema.
 
-Los logs se guardan con rotación en `logs/app.log`. El token se conserva en `.env` con permisos `600`, puede sobreescribirse con la variable de entorno `PYANNOTE_KEY` y nunca se pasa como argumento del proceso de pyannote.
+Los logs se guardan con rotación en `logs/app.log`. El token se conserva en `.env`, puede sobreescribirse con la variable de entorno `PYANNOTE_KEY` y nunca se pasa como argumento del proceso de pyannote. En macOS/Linux el archivo recibe permisos `600`; en Windows se respetan las ACL de la carpeta del usuario.
 
 ## Flujo de trabajo
 
@@ -69,18 +69,22 @@ El resultado final tiene este formato:
 
 ### Sistema
 
-- **macOS**, probado en Apple Silicon.
+- **macOS** (probado en Apple Silicon) o **Windows 10/11 x64**.
 - **Python 3.14 o superior**.
 - [uv](https://docs.astral.sh/uv/) para crear el entorno e instalar las dependencias Python.
-- **ffmpeg**, necesario tanto para combinar audio/video en yt-dlp como para extraer el WAV.
-- **CMake** y un compilador C/C++ para compilar whisper.cpp. En macOS se obtienen con Xcode Command Line Tools.
+- **ffmpeg** para combinar audio/video en yt-dlp y extraer el WAV. No hace falta instalarlo: `uv sync` incluye **static-ffmpeg**, que baja los ejecutables `ffmpeg` y `ffprobe` a `.venv/` la primera vez que se los necesita. Si existe un ffmpeg en el sistema, la app siempre le da prioridad.
+- **CMake** y un compilador C/C++ para compilar whisper.cpp. En macOS se obtienen con Xcode Command Line Tools; en Windows, con Visual Studio Build Tools y la carga de trabajo **Desarrollo para el escritorio con C++**.
 
-Instalación de las herramientas con Homebrew:
+En macOS, las herramientas pueden instalarse con Homebrew:
 
 ```bash
 xcode-select --install
-brew install uv ffmpeg cmake
+brew install uv cmake
 ```
+
+En Windows, instalá uv, CMake y Visual Studio Build Tools desde sus sitios oficiales. No hace falta WSL, Git Bash ni FFmpeg del sistema.
+
+> **Audio de pyannote:** el WAV se precarga con `torchaudio` y se entrega a pyannote como waveform. Por eso la diarización no necesita las bibliotecas compartidas de FFmpeg que `torchcodec` podría requerir para decodificar otros archivos.
 
 ### Python
 
@@ -90,10 +94,11 @@ brew install uv ffmpeg cmake
 - `pyannote-audio`: diarización de hablantes.
 - `torch`, `torchaudio` y `torchvision`: ejecución de los modelos de pyannote.
 - `torchcodec`: decodificación de audio para pyannote. Va acoplado binariamente a `torch` (no lo declara como dependencia), por eso la familia `torch`/`torchaudio`/`torchvision`/`torchcodec` se actualiza siempre junta.
+- `static-ffmpeg`: provee los ejecutables `ffmpeg` y `ffprobe` sin Homebrew. El paquete en sí es liviano; los binarios se descargan automáticamente en `.venv/` la primera vez que el pipeline los usa.
 - `PySide6-Essentials` y `qtawesome`: interfaz de escritorio Qt 6 e iconos.
 - `pytest` (grupo de desarrollo): tests del núcleo y de la GUI.
 
-En Apple Silicon, pyannote usa **MPS** si está disponible; en caso contrario, utiliza CPU.
+pyannote selecciona **CUDA** si hay una GPU NVIDIA compatible, **MPS** en Apple Silicon y **CPU** como respaldo.
 
 ### Modelos
 
@@ -109,15 +114,27 @@ En Apple Silicon, pyannote usa **MPS** si está disponible; en caso contrario, u
 uv sync
 ```
 
-Esto crea `.venv/` con el intérprete y las dependencias del proyecto.
+Esto crea `.venv/` con el intérprete y las dependencias del proyecto, incluido el ffmpeg empaquetado: `uv sync` instala `static-ffmpeg` y los binarios `ffmpeg`/`ffprobe` se descargan solos la primera vez que el pipeline los usa (o en el arranque de la GUI). Si querés bajarlos ya, sin esperar:
+
+```bash
+uv run python -c "from app.core.ffmpeg import ensure_ffmpeg; print(ensure_ffmpeg())"
+```
 
 ### 2. Configurar Hugging Face
+
+En macOS/Linux:
 
 ```bash
 cp .env.example .env
 ```
 
-Edita `.env`:
+En Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+También podés pegar y guardar el token desde la pantalla **Ajustes** de la GUI. Edita `.env`:
 
 ```dotenv
 PYANNOTE_KEY=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -129,19 +146,19 @@ PYANNOTE_KEY=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 El código fuente está incluido en `whisper/`; el build no se versiona.
 
+Los mismos comandos funcionan en macOS y Windows:
+
 ```bash
-cd whisper
-cmake -B build
-cmake --build build --config Release -j
-cd ..
+cmake -S whisper -B whisper/build
+cmake --build whisper/build --config Release --parallel
 ```
+
+La aplicación encuentra el ejecutable tanto en `whisper/build/bin/whisper-cli` como en la salida multiconfiguración de Visual Studio, `whisper/build/bin/Release/whisper-cli.exe`.
 
 ### 4. Descargar el modelo de Whisper
 
 ```bash
-cd whisper
-./models/download-ggml-model.sh large-v3-turbo
-cd ..
+uv run yt-transcript modelo large-v3-turbo
 ```
 
 El archivo debe quedar en:
@@ -152,15 +169,24 @@ whisper/models/ggml-large-v3-turbo.bin
 
 ## Actualizar dependencias
 
+En macOS/Linux:
+
 ```bash
 ./actualizar.sh
 ```
 
-El script comprueba por separado:
+En Windows:
 
-- `yt-dlp`, `pyannote-audio`, `torch`, `torchaudio`, `torchvision` y `torchcodec` en PyPI.
+```bat
+actualizar.cmd
+```
+
+También podés usar directamente `uv run yt-transcript actualizar`. La implementación está en Python y comprueba por separado:
+
+- `yt-dlp`, `pyannote-audio`, `torch`, `torchaudio`, `torchvision`, `torchcodec` y `static-ffmpeg` en PyPI.
   - La familia `torch`/`torchaudio`/`torchvision`/`torchcodec` se actualiza **junta en un solo comando**, porque `torchcodec` está acoplado binariamente a `torch` aunque no lo declare como dependencia.
-- `ffmpeg`, `cmake` y `uv` en Homebrew.
+  - Actualizar `static-ffmpeg` reinstala los binarios `ffmpeg`/`ffprobe` empaquetados: la app los vuelve a descargar automáticamente al primer uso.
+- `ffmpeg`, `cmake` y `uv` en Homebrew, **solo en macOS** y si están instalados ahí.
 - La última release estable de whisper.cpp en GitHub.
 
 Cuando encuentra una actualización, muestra las versiones y pregunta si deseas instalarla antes de hacer cualquier cambio. La actualización de whisper.cpp descarga el código fuente, conserva `models/` y `build/`, y recompila `whisper-cli`.
@@ -171,25 +197,29 @@ Para consultar sin instalar nada:
 ./actualizar.sh --solo-comprobar
 ```
 
+En Windows: `actualizar.cmd --solo-comprobar`.
+
 ## Uso del pipeline completo
+
+En macOS/Linux:
 
 ```bash
 ./auto.sh <URL_DE_YOUTUBE> [DIRECTORIO_SALIDA]
 ```
 
-Ejemplo:
+En Windows:
 
-```bash
-./auto.sh "https://www.youtube.com/watch?v=XXXXXXXXXXX"
+```bat
+auto.cmd "https://www.youtube.com/watch?v=XXXXXXXXXXX" C:\ruta\resultados
 ```
 
-Si no indicas directorio de salida, se usa `salida/`. También puedes elegir otro:
+La forma multiplataforma directa es:
 
 ```bash
-./auto.sh "https://www.youtube.com/watch?v=XXXXXXXXXXX" /ruta/resultados
+uv run yt-transcript pipeline "https://www.youtube.com/watch?v=XXXXXXXXXXX" salida
 ```
 
-El script ejecuta estas etapas:
+Si no indicas directorio de salida, se usa `salida/`. El comando ejecuta estas etapas:
 
 1. Descarga el video con una calidad objetivo de **1080p** y genera un `.md` con sus metadatos.
 2. Extrae un WAV PCM de 16 bits, 44,1 kHz y estéreo en `temporales/`.
@@ -198,13 +228,14 @@ El script ejecuta estas etapas:
 5. Combina la transcripción y la diarización por solapamiento temporal.
 6. Guarda el guion final `<nombre>_diarizado.txt` en el directorio de salida.
 
-Las rutas del binario, el modelo y el idioma de Whisper se configuran al comienzo de `auto.sh`:
+La calidad, el idioma y el modelo se pueden cambiar sin editar archivos:
 
 ```bash
-WHISPER_BIN="$DIR_RAIZ/whisper/build/bin/whisper-cli"
-WHISPER_MODEL="$DIR_RAIZ/whisper/models/ggml-large-v3-turbo.bin"
-WHISPER_LANG="es"
+uv run yt-transcript pipeline "https://www.youtube.com/watch?v=XXXXXXXXXXX" \
+  --calidad 720 --idioma es --modelo whisper/models/ggml-large-v3-turbo.bin
 ```
+
+Agregá `--forzar` para repetir etapas aunque ya existan sus resultados.
 
 ### Reanudar o repetir etapas
 
@@ -215,7 +246,7 @@ Cada etapa se omite si ya existe su archivo de resultado:
 - TXT de diarización existente: no vuelve a ejecutar pyannote.
 - Guion `_diarizado.txt` existente: no vuelve a hacer el merge.
 
-Para repetir una etapa, elimina su archivo de salida y vuelve a ejecutar `auto.sh`.
+Para repetir una etapa, eliminá su archivo de salida y volvé a ejecutar el comando, o usá `--forzar`.
 
 ## Archivos generados
 
@@ -256,12 +287,12 @@ Si un segmento contiene un cambio de voz, su texto se atribuye al hablante domin
 
 ## Ejecutar las herramientas por separado
 
-No hace falta activar manualmente el entorno: puedes usar `.venv/bin/python`.
+No hace falta activar manualmente el entorno ni conocer si usa `bin/` o `Scripts/`: `uv run python` selecciona el intérprete correcto en ambos sistemas.
 
 ### Descargar un video
 
 ```bash
-.venv/bin/python yt_dlp/descargadorYT_V2.py <URL> <calidad> [--audio] [--output RUTA]
+uv run python yt_dlp/descargadorYT_V2.py <URL> <calidad> [--audio] [--output RUTA]
 ```
 
 - `<calidad>`: `720`, `1080`, `2160`, etc. Selecciona la resolución más alta que no supere la solicitada.
@@ -285,10 +316,12 @@ whisper/build/bin/whisper-cli \
 - `-ml 60 -sow`: limita la longitud de los segmentos y los divide por palabras.
 - `-of`: prefijo de salida **sin extensión**.
 
+En Windows con Visual Studio, reemplazá `whisper/build/bin/whisper-cli` por `whisper/build/bin/Release/whisper-cli.exe`. La GUI y el CLI detectan ambas ubicaciones automáticamente.
+
 ### Diarizar con pyannote
 
 ```bash
-.venv/bin/python pyannote/prueba_pyannote_V2.py \
+uv run python pyannote/prueba_pyannote_V2.py \
   -a /ruta/absoluta/audio.wav
 ```
 
@@ -301,12 +334,12 @@ start=3.2s stop=7.8s speaker_SPEAKER_01
 
 El script toma el token de `PYANNOTE_KEY`. También acepta `-t/--token` para mantener compatibilidad con la CLI anterior, aunque se recomienda el entorno para que el secreto no aparezca en la lista de procesos.
 
-Si ejecutas el comando desde una shell, carga antes la variable con `export PYANNOTE_KEY=...` o reemplázala directamente por tu token.
+Si ejecutás el comando desde una shell, cargá antes la variable con `export PYANNOTE_KEY=...` en macOS/Linux o `$env:PYANNOTE_KEY="..."` en PowerShell. También podés guardarla en `.env` desde la GUI.
 
 ### Hacer el merge manualmente
 
 ```bash
-.venv/bin/python merge/merge_whisper_pyannote.py \
+uv run python merge/merge_whisper_pyannote.py \
   -j temporales/<nombre>.json \
   -d temporales/<nombre>.txt \
   -o salida/<nombre>_diarizado.txt
@@ -317,7 +350,7 @@ Si omites `-o`, el resultado se crea junto al JSON como `<nombre>_diarizado.txt`
 Para obtener una línea por segmento de Whisper, sin unir turnos consecutivos:
 
 ```bash
-.venv/bin/python merge/merge_whisper_pyannote.py \
+uv run python merge/merge_whisper_pyannote.py \
   -j temporales/<nombre>.json \
   -d temporales/<nombre>.txt \
   --sin-fusionar
@@ -329,29 +362,32 @@ Para obtener una línea por segmento de Whisper, sin unir turnos consecutivos:
 uv run pytest
 ```
 
-La suite cubre selección de calidad, listado de modelos, parseo/estado de actualizaciones, guardado y carga segura del token, y transiciones/cancelación del pipeline con mocks. Las pruebas de red y subprocess están aisladas: no descargan modelos ni actualizan dependencias.
+La suite cubre selección de calidad, listado de modelos, resolución de ffmpeg/ffprobe, rutas de Python/Whisper en POSIX y Windows, creación y cancelación de procesos por SO, actualizaciones, token, CLI y transiciones del pipeline. Las pruebas de red y subprocess están aisladas: no descargan modelos ni actualizan dependencias. El workflow `.github/workflows/tests.yml` ejecuta la suite en macOS y Windows con Python 3.14.
 
 ## Estructura del proyecto
 
 ```text
 .
-├── auto.sh                         # Pipeline completo
-├── actualizar.sh                   # Comprobación y actualización de dependencias
+├── auto.sh / auto.cmd              # Pipeline completo en macOS/Linux y Windows
+├── actualizar.sh / actualizar.cmd  # Actualizaciones en macOS/Linux y Windows
+├── .gitattributes                  # Fines de línea y archivos binarios
+├── .github/workflows/tests.yml     # Tests en macOS y Windows
 ├── .env                            # Token local; no se versiona
 ├── .env.example                    # Plantilla de configuración
-├── pyproject.toml / uv.lock        # Dependencias Python y entry point `gui`
+├── pyproject.toml / uv.lock        # Dependencias y entry points `gui` / `yt-transcript`
 ├── app/
 │   ├── main.py                     # Entrada de la aplicación Qt
-│   ├── config.py                   # Rutas del proyecto
-│   ├── core/                       # Descarga, pipeline, Whisper y actualizaciones
+│   ├── cli.py                      # CLI multiplataforma
+│   ├── config.py                   # Rutas del proyecto y ejecutables por SO
+│   ├── core/                       # Descarga, pipeline, ffmpeg, Whisper y actualizaciones
 │   ├── services/                   # Workers, token y servicios compartidos
 │   └── ui/                         # Ventana, pantallas, diálogos y tema
-├── tests/                          # Tests de calidad, modelos, updates, token y pipeline
+├── tests/                          # Tests del núcleo, CLI, rutas, procesos y plataforma
 ├── yt_dlp/
 │   ├── descargadorYT.py
 │   └── descargadorYT_V2.py         # Descarga y metadatos
 ├── pyannote/
-│   └── prueba_pyannote_V2.py       # Diarización con MPS o CPU
+│   └── prueba_pyannote_V2.py       # Diarización con CUDA, MPS o CPU
 ├── merge/
 │   └── merge_whisper_pyannote.py   # Unión por solapamiento temporal
 ├── whisper/                        # Código fuente y modelo de whisper.cpp

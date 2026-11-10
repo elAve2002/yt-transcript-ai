@@ -73,13 +73,15 @@ def save_token(env_path: Path, token: str) -> None:
     )
     temporary_path = Path(temporary_name)
     try:
-        os.chmod(temporary_path, 0o600)
+        if os.name != "nt":
+            os.chmod(temporary_path, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as file:
             file.write("".join(output))
             file.flush()
             os.fsync(file.fileno())
         os.replace(temporary_path, env_path)
-        os.chmod(env_path, 0o600)
+        if os.name != "nt":
+            os.chmod(env_path, 0o600)
     except BaseException:
         temporary_path.unlink(missing_ok=True)
         raise

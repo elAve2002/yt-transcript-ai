@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import stat
 import tempfile
 import unittest
@@ -70,7 +71,8 @@ class TokenFileTests(unittest.TestCase):
             self.env_path.read_text(encoding="utf-8"),
             "# comentario\nOTHER=value\nPYANNOTE_KEY=new-token\nEMPTY=\n",
         )
-        self.assertEqual(stat.S_IMODE(self.env_path.stat().st_mode), 0o600)
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE(self.env_path.stat().st_mode), 0o600)
 
     def test_save_adds_missing_token(self):
         self.env_path.write_text("# comentario\nOTHER=value", encoding="utf-8")

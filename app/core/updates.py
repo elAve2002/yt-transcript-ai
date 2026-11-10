@@ -7,9 +7,9 @@ import json
 import os
 import queue
 import re
-import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from packaging.version import Version
+
+from app.core.process import format_command, process_group_kwargs, terminate_process_tree
 
 
 class UpdateStatus(str, Enum):
@@ -49,7 +51,15 @@ class UpdateComponent:
 class UpdateChecker:
     """Consulta versiones en paralelo y conserva el último resultado en cache."""
 
-    _PYTHON_PACKAGES = ("yt-dlp", "pyannote-audio", "torch", "torchaudio", "torchvision", "torchcodec")
+    _PYTHON_PACKAGES = (
+        "yt-dlp",
+        "pyannote-audio",
+        "torch",
+        "torchaudio",
+        "torchvision",
+        "torchcodec",
+        "static-ffmpeg",
+    )
     # torchcodec no declara torch como dependencia, pero van acoplados binariamente:
     # actualizar uno sin el otro rompe pyannote en runtime. Se mueven siempre juntos.
     _TORCH_FAMILY = ("torch", "torchaudio", "torchvision", "torchcodec")
@@ -82,9 +92,10 @@ class UpdateChecker:
                 self._upgrade_command(package),
             )
             jobs.append((metadata, lambda package=package: self._check_python(package)))
-        for formula in self._HOMEBREW_FORMULAS:
-            metadata = (formula, formula, "homebrew", ["brew", "upgrade", formula])
-            jobs.append((metadata, lambda formula=formula: self._check_homebrew(formula)))
+        if sys.platform == "darwin":
+            for formula in self._HOMEBREW_FORMULAS:
+                metadata = (formula, formula, "homebrew", ["brew", "upgrade", formula])
+                jobs.append((metadata, lambda formula=formula: self._check_homebrew(formula)))
         whisper_metadata = (
             "whisper.cpp",
             "whisper.cpp",
@@ -337,7 +348,7 @@ class UpdateExecutor:
         on_line: Callable[[str], None],
         cancel_event: threading.Event,
     ) -> None:
-        on_line(f"$ {shlex.join(command)}")
+        on_line(f"$ {format_command(command)}")
         try:
             process = subprocess.Popen(
                 command,
@@ -348,6 +359,7 @@ class UpdateExecutor:
                 errors="replace",
                 bufsize=1,
                 cwd=self.root,
+                **process_group_kwargs(),
             )
         except OSError as exc:
             raise RuntimeError(f"No se pudo ejecutar {command[0]}: {exc}") from exc
@@ -395,8 +407,7 @@ class UpdateExecutor:
 
     @staticmethod
     def _terminate(process: subprocess.Popen[str]) -> None:
-        if process.poll() is None:
-            process.terminate()
+        terminate_process_tree(process)
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
@@ -453,7 +464,7 @@ class UpdateExecutor:
         on_line: Callable[[str], None],
         cancel_event: threading.Event,
     ) -> None:
-        on_line(f"$ curl -fL {shlex.quote(url)}")
+        on_line(f"Descargando whisper.cpp desde {url}")
         request = urllib.request.Request(url, headers={"User-Agent": "yt-transcript-ai-updater"})
         try:
             with urllib.request.urlopen(request, timeout=20) as response, destination.open("wb") as output:

@@ -81,7 +81,9 @@ class MainWindow(QMainWindow):
             self.nav_buttons[key] = button
             side.addWidget(button)
         side.addStretch()
-        side.addWidget(QLabel("⌘O abrir · ⌘↵ procesar"))
+        open_key = QKeySequence("Ctrl+O").toString(QKeySequence.SequenceFormat.NativeText)
+        process_key = QKeySequence("Ctrl+Return").toString(QKeySequence.SequenceFormat.NativeText)
+        side.addWidget(QLabel(f"{open_key} abrir · {process_key} procesar"))
         root.addWidget(sidebar)
 
         self.home_page = HomePage()
@@ -137,13 +139,13 @@ class MainWindow(QMainWindow):
 
         actions_menu = self.menuBar().addMenu("Acciones")
         process_action = QAction("Iniciar pipeline", self)
-        process_action.setShortcuts([QKeySequence("Meta+Return"), QKeySequence("Meta+Enter")])
+        process_action.setShortcuts([QKeySequence("Ctrl+Return"), QKeySequence("Ctrl+Enter")])
         process_action.triggered.connect(self._start_process)
         actions_menu.addAction(process_action)
 
         preferences = QAction("Ajustes…", self)
         preferences.setMenuRole(QAction.MenuRole.PreferencesRole)
-        preferences.setShortcut(QKeySequence("Meta+,"))
+        preferences.setShortcut(QKeySequence("Ctrl+,"))
         preferences.triggered.connect(lambda: self.navigate("settings"))
         self.menuBar().addAction(preferences)
 

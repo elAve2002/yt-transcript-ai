@@ -182,8 +182,8 @@ class ProcessPage(QWidget):
             index = self.model_combo.findData(str(self.paths.whisper_models / previous))
             self.model_combo.setCurrentIndex(index if index >= 0 else 0)
         warnings = []
-        if not self.paths.whisper_cli.is_file():
-            warnings.append("Falta whisper-cli: compilá con cmake -S whisper -B whisper/build && cmake --build whisper/build -j.")
+        if not self.paths.find_whisper_cli():
+            warnings.append("Falta whisper-cli: compilá whisper.cpp con CMake siguiendo el README.")
         if not models:
             warnings.append("No hay ggml-*.bin: usá Descargar modelo. Las descargas y otras pantallas siguen disponibles.")
         self.whisper_warning.setText(" ".join(warnings))

@@ -11,6 +11,7 @@ dependencies = [
     "pyannote-audio>=4.0.7",
     "PySide6-Essentials==6.12.0",
     "qtawesome==1.4.2",
+    "static-ffmpeg>=3.0",
     "torch>=2.13.0",
     "torchaudio>=2.11.0",
     "torchcodec>=0.17.0",
@@ -21,6 +22,7 @@ dependencies = [
 [project.scripts]
 guion-voces = "app.main:main"
 gui = "app.main:main"
+yt-transcript = "app.cli:main"
 
 [dependency-groups]
 dev = [

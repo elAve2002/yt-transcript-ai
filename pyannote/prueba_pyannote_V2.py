@@ -1,52 +1,57 @@
 import argparse
 import os
+from pathlib import Path
+
 import torch
+import torchaudio
 from pyannote.audio import Pipeline
 from pyannote.audio.pipelines.utils.hook import ProgressHook
 
+
+def select_device() -> torch.device:
+    """Usa la GPU disponible y conserva CPU como respaldo multiplataforma."""
+    if torch.cuda.is_available():
+        print("Usando GPU CUDA para aceleración.")
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        print("Usando GPU Apple Silicon (MPS) para aceleración.")
+        return torch.device("mps")
+    print("No hay GPU compatible disponible; usando CPU.")
+    return torch.device("cpu")
+
+
 def main():
-    # 1. Configurar el parser de argumentos
-    parser = argparse.ArgumentParser(description="Diarización de audio con pyannote optimizado para Apple Silicon (M5).")
-    parser.add_argument("-t", "--token", default=os.environ.get('PYANNOTE_KEY'), help="Tu token de acceso de Hugging Face.")
-    parser.add_argument("-a", "--audio", required=True, help="Ruta al archivo de audio que querés procesar.")
-    
+    parser = argparse.ArgumentParser(description="Diarización de audio con pyannote.")
+    parser.add_argument("-t", "--token", default=os.environ.get("PYANNOTE_KEY"), help="Tu token de acceso de Hugging Face.")
+    parser.add_argument("-a", "--audio", required=True, help="Ruta al archivo de audio WAV que querés procesar.")
+
     args = parser.parse_args()
     if not args.token:
         parser.error("Debés proporcionar un token con -t/--token o definir la variable de entorno PYANNOTE_KEY.")
 
     print(f"Cargando pipeline para el archivo: {args.audio}...")
 
-    # 2. Cargar el pipeline usando el token proporcionado
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-community-1",
-        token=args.token
+        token=args.token,
     )
+    pipeline.to(select_device())
 
-    # 3. Detectar si Apple Silicon GPU (MPS) está disponible
-    if torch.backends.mps.is_available():
-        device = torch.device("mps")
-        print("⚡ Usando el chip M5 (MPS) para aceleración.")
-    else:
-        device = torch.device("cpu")
-        print("⚠️ MPS no disponible, usando CPU.")
-
-    pipeline.to(device)
-
-    # 4. Aplicar el pipeline con el archivo de audio proporcionado
+    # El pipeline genera WAV PCM. Decodificarlo con torchaudio evita exigir las
+    # bibliotecas compartidas de FFmpeg que torchcodec necesita en algunos SO.
+    waveform, sample_rate = torchaudio.load(args.audio)
+    audio = {"waveform": waveform, "sample_rate": sample_rate}
     with ProgressHook() as hook:
-        output = pipeline(args.audio, hook=hook)
+        output = pipeline(audio, hook=hook)
 
-    # 5. Guardar los resultados en un archivo .txt
-    # Generar nombre de salida basado en el audio
-    base_name = os.path.splitext(os.path.basename(args.audio))[0]
+    base_name = Path(args.audio).stem
     output_file = base_name + ".txt"
-    # Si quieres guardar en otra carpeta, puedes especificar una ruta, ej: os.path.join("resultados", output_file)
-
-    with open(output_file, "w", encoding="utf-8") as f:
+    with open(output_file, "w", encoding="utf-8") as file:
         for turn, speaker in output.speaker_diarization:
-            f.write(f"start={turn.start:.1f}s stop={turn.end:.1f}s speaker_{speaker}\n")
+            file.write(f"start={turn.start:.1f}s stop={turn.end:.1f}s speaker_{speaker}\n")
 
-    print(f"\n✅ Resultados guardados en: {output_file}")
+    print(f"\nResultados guardados en: {output_file}")
+
 
 if __name__ == "__main__":
     main()

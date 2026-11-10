@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import shlex
+import sys
 import threading
 
 from PySide6.QtCore import QThreadPool, QTimer, Signal
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.config import ProjectPaths
+from app.core.process import format_command
 from app.core.updates import UpdateChecker, UpdateComponent, UpdateExecutor, UpdateStatus
 from app.services.workers import TaskFailure, TaskWorker
 from app.ui.widgets import Card, PageHeader, Spinner
@@ -104,8 +105,9 @@ class UpdatesPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 20)
         root.setSpacing(14)
+        sources = "PyPI, Homebrew y whisper.cpp" if sys.platform == "darwin" else "PyPI y whisper.cpp"
         root.addWidget(PageHeader(
-            "Actualizaciones", "Versiones de PyPI, Homebrew y whisper.cpp. La caché dura 10 minutos."
+            "Actualizaciones", f"Versiones de {sources}. La caché dura 10 minutos."
         ))
         card = Card()
         toolbar = QHBoxLayout()
@@ -203,14 +205,13 @@ class UpdatesPage(QWidget):
             if component.kind == "whisper":
                 lines.extend([
                     f"# {component.name}",
-                    f"curl -fL {component.tarball_url} -o temporales/whisper.cpp.tar.gz",
-                    "tar -xzf temporales/whisper.cpp.tar.gz -C temporales/",
-                    "rsync -a --exclude=models/ --exclude=build/ --exclude=.git/ <fuente>/ whisper/",
+                    "Descargar y extraer la release en temporales/",
+                    "Copiar el código conservando models/, build/ y .git/",
                     "cmake -S whisper -B whisper/build",
-                    "cmake --build whisper/build --config Release -j",
+                    "cmake --build whisper/build --config Release --parallel",
                 ])
             else:
-                lines.append(shlex.join(component.command))
+                lines.append(format_command(component.command))
         return "\n".join(lines)
 
     def confirm_update(self, components: list[UpdateComponent]) -> None:

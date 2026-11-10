@@ -1,4 +1,4 @@
-"""Ejecución de procesos externos con log en vivo y cancelación real."""
+"""Ejecución multiplataforma de procesos con log en vivo y cancelación real."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 
 class ProcessCancelled(RuntimeError):
@@ -21,6 +21,50 @@ class ProcessCancelled(RuntimeError):
 class ProcessResult:
     command: tuple[str, ...]
     returncode: int
+
+
+def process_group_kwargs() -> dict[str, Any]:
+    """Opciones de Popen para aislar el proceso y poder cancelarlo por SO."""
+    if os.name == "nt":
+        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    return {"start_new_session": True}
+
+
+def format_command(command: Sequence[str]) -> str:
+    """Representa un comando con el quoting nativo, solo para mostrarlo."""
+    args = list(command)
+    return subprocess.list2cmdline(args) if os.name == "nt" else shlex.join(args)
+
+
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    """Termina el proceso y sus hijos sin propagar errores si ya finalizó."""
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+            return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        try:
+            process.terminate()
+        except OSError:
+            pass
+        return
+
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        try:
+            process.terminate()
+        except OSError:
+            pass
 
 
 class SubprocessJob:
@@ -35,11 +79,8 @@ class SubprocessJob:
         self.cancel_event.set()
         with self._lock:
             process = self._process
-        if process and process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                process.terminate()
+        if process:
+            terminate_process_tree(process)
 
     def run(
         self,
@@ -53,7 +94,7 @@ class SubprocessJob:
             raise ProcessCancelled("Operación cancelada.")
         args = tuple(str(part) for part in command)
         if on_line:
-            on_line(f"$ {shlex.join(args)}")
+            on_line(f"$ {format_command(args)}")
         process = subprocess.Popen(
             args,
             cwd=str(cwd) if cwd else None,
@@ -64,7 +105,7 @@ class SubprocessJob:
             encoding="utf-8",
             errors="replace",
             bufsize=1,
-            start_new_session=True,
+            **process_group_kwargs(),
         )
         with self._lock:
             self._process = process

@@ -142,6 +142,15 @@ def main():
     parser.add_argument("--output", type=str, default=".", help="Carpeta de destino para los archivos descargados.")
     args = parser.parse_args()
 
+    # Si ffmpeg/ffprobe no están en el PATH, usar los empaquetados por static-ffmpeg
+    # (solo si faltan; se descargan la primera vez que se los necesita).
+    try:
+        import static_ffmpeg
+
+        static_ffmpeg.add_paths(weak=True)
+    except Exception as e:
+        print(f"Aviso: no se pudo preparar el ffmpeg empaquetado: {e}", file=sys.stderr)
+
     # Validar carpeta de salida
     output_dir = Path(args.output).expanduser().resolve()
     try:

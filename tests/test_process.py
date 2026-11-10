@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 import sys
+import threading
 
 import pytest
 
-from app.core.process import ProcessCancelled, SubprocessJob
+from app.core import process as process_module
+from app.core.process import (
+    ProcessCancelled,
+    SubprocessJob,
+    format_command,
+    process_group_kwargs,
+    terminate_process_tree,
+)
 
 
 def test_failing_command_reports_last_output_lines() -> None:
@@ -39,3 +47,37 @@ def test_cancelled_job_raises_before_start() -> None:
 
     with pytest.raises(ProcessCancelled):
         job.run([sys.executable, "-c", "print('no debería ejecutarse')"])
+
+
+def test_windows_process_options_and_command_format(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_module.os, "name", "nt")
+
+    assert "creationflags" in process_group_kwargs()
+    assert format_command(["python", "-c", "print('hola mundo')"]) == 'python -c "print(\'hola mundo\')"'
+
+
+def test_posix_process_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_module.os, "name", "posix")
+
+    assert process_group_kwargs() == {"start_new_session": True}
+
+
+def test_windows_cancellation_uses_taskkill(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_module.os, "name", "nt")
+    commands = []
+
+    class FakeProcess:
+        pid = 123
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(
+        process_module.subprocess,
+        "run",
+        lambda command, **kwargs: commands.append(command),
+    )
+
+    terminate_process_tree(FakeProcess())
+
+    assert commands == [["taskkill", "/PID", "123", "/T", "/F"]]

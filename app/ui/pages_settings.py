@@ -70,7 +70,8 @@ class SettingsPage(QWidget):
         token.layout.addWidget(title)
         help_text = QLabel(
             'Necesitás un token con acceso a <b>pyannote/speaker-diarization-community-1</b>. '
-            'Se guarda localmente en <code>.env</code> con permisos 600.'
+            'Se guarda localmente en <code>.env</code>; en macOS/Linux se aplican permisos 600 '
+            'y en Windows se conservan las ACL de la carpeta del usuario.'
         )
         help_text.setWordWrap(True)
         token.layout.addWidget(help_text)

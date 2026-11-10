@@ -14,6 +14,7 @@ import yt_dlp
 from yt_dlp.utils import DownloadError
 
 from app.config import ProjectPaths
+from app.core.ffmpeg import ensure_ffmpeg
 
 
 class DownloadCancelled(RuntimeError):
@@ -252,6 +253,8 @@ def download_video(
     if options.audio_only:
         ydl_options["format"] = "bestaudio/best"
         if options.audio_format != "best":
+            ffmpeg, _ = ensure_ffmpeg()
+            ydl_options["ffmpeg_location"] = str(ffmpeg.parent)
             processor: dict[str, Any] = {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": options.audio_format,
@@ -260,6 +263,9 @@ def download_video(
                 processor["preferredquality"] = options.audio_quality
             ydl_options["postprocessors"] = [processor]
     else:
+        ffmpeg, _ = ensure_ffmpeg()
+        # La fusion de video+audio de yt-dlp usa el ffmpeg resuelto (sistema o empaquetado).
+        ydl_options["ffmpeg_location"] = str(ffmpeg.parent)
         legacy = _load_legacy_downloader(paths)
         heights = {quality.height for quality in video_info.qualities}
         if not heights:

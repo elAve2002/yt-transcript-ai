@@ -224,17 +224,40 @@ def test_check_all_uses_cache_and_force(monkeypatch: pytest.MonkeyPatch, tmp_pat
     )
     monkeypatch.setattr(checker, "_check_whisper", lambda: fake_check("whisper.cpp", "whisper"))
 
+    expected = len(checker._PYTHON_PACKAGES) + 1
+    if updates.sys.platform == "darwin":
+        expected += len(checker._HOMEBREW_FORMULAS)
+
     first = checker.check_all()
-    assert len(first) == 10
-    assert calls == 10
+    assert len(first) == expected
+    assert calls == expected
 
     first[0].command.append("cambio-local")
     second = checker.check_all()
-    assert calls == 10
+    assert calls == expected
     assert "cambio-local" not in second[0].command
 
     checker.check_all(force=True)
-    assert calls == 20
+    assert calls == expected * 2
+
+
+def test_check_all_omits_homebrew_outside_macos(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    checker = UpdateChecker(tmp_path)
+    monkeypatch.setattr(checker, "_check_python", lambda package: component(package))
+    monkeypatch.setattr(
+        checker,
+        "_check_homebrew",
+        lambda formula: pytest.fail("Homebrew no debe consultarse en Windows"),
+    )
+    monkeypatch.setattr(checker, "_check_whisper", lambda: component("whisper.cpp", "whisper"))
+
+    components = checker.check_all()
+
+    assert len(components) == len(checker._PYTHON_PACKAGES) + 1
+    assert all(item.kind != "homebrew" for item in components)
 
 
 def test_check_all_cache_expires(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -252,13 +275,17 @@ def test_check_all_cache_expires(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.setattr(checker, "_check_homebrew", lambda formula: fake_check())
     monkeypatch.setattr(checker, "_check_whisper", fake_check)
 
+    expected = len(checker._PYTHON_PACKAGES) + 1
+    if updates.sys.platform == "darwin":
+        expected += len(checker._HOMEBREW_FORMULAS)
+
     checker.check_all()
     checker.check_all()
-    assert calls == 10
+    assert calls == expected
 
     now += 601
     checker.check_all()
-    assert calls == 20
+    assert calls == expected * 2
 
 
 class FakeProcess:

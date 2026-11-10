@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
 from app.core.download import MediaInfo
+from app.core.ffmpeg import ensure_ffmpeg
 
 MEDIA_EXTENSIONS = (".mp4", ".mkv", ".webm", ".mov", ".m4a", ".mp3", ".wav", ".flac")
 
@@ -19,9 +19,7 @@ def is_media_file(path: Path) -> bool:
 def probe_media(path: Path, timeout: int = 20) -> MediaInfo:
     if not is_media_file(path):
         raise ValueError("Seleccioná un archivo multimedia compatible.")
-    executable = shutil.which("ffprobe")
-    if not executable:
-        raise RuntimeError("No se encontró ffprobe. Instalá ffmpeg con 'brew install ffmpeg'.")
+    executable = str(ensure_ffmpeg()[1])
     try:
         result = subprocess.run(
             [executable, "-v", "error", "-show_entries",

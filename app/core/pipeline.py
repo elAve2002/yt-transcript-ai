@@ -11,6 +11,7 @@ from typing import Callable
 
 from app.config import ProjectPaths
 from app.core.download import DownloadOptions, DownloadProgress, VideoInfo, analyze_video, download_video
+from app.core.ffmpeg import ensure_ffmpeg
 from app.core.process import ProcessCancelled, SubprocessJob
 from app.services.token import load_token
 
@@ -218,8 +219,9 @@ class PipelineRunner:
             self._log(f"Se reutiliza el audio: {self._wav_file.name}")
             self._files.append(self._wav_file)
             return True
+        ffmpeg, _ = ensure_ffmpeg(on_download=self._log)
         self.process.run([
-            "ffmpeg", "-hide_banner", "-y", "-i", source,
+            str(ffmpeg), "-hide_banner", "-y", "-i", source,
             "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", self._wav_file,
         ], on_line=lambda line: self._log(line))
         self._files.append(self._wav_file)
@@ -233,12 +235,16 @@ class PipelineRunner:
             self._log("Se reutilizan la transcripción SRT y JSON existentes.")
             self._files.extend([srt, json_file])
             return True
-        if not self.paths.whisper_cli.is_file():
-            raise RuntimeError("Falta whisper-cli. Compilá whisper.cpp con cmake; la app puede seguir usándose para descargas.")
+        whisper_cli = self.paths.find_whisper_cli()
+        if not whisper_cli:
+            raise RuntimeError(
+                "Falta whisper-cli. Compilá whisper.cpp con CMake; "
+                "la app puede seguir usándose para descargas."
+            )
         if not self.config.whisper_model.is_file():
             raise RuntimeError("El modelo Whisper seleccionado no existe. Descargalo desde el selector de modelos.")
         self.process.run([
-            self.paths.whisper_cli, "-m", self.config.whisper_model, "-f", wav,
+            whisper_cli, "-m", self.config.whisper_model, "-f", wav,
             "-l", self.config.language, "-osrt", "-oj", "-ml", "60", "-sow", "-of", base,
         ], on_line=lambda line: self._log(line))
         self._files.extend([srt, json_file])
