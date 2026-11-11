@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 
 import pytest
 
@@ -47,6 +48,26 @@ def test_cancelled_job_raises_before_start() -> None:
 
     with pytest.raises(ProcessCancelled):
         job.run([sys.executable, "-c", "print('no debería ejecutarse')"])
+
+
+def test_cancelling_running_job_interrupts_and_raises() -> None:
+    """Cancelar un proceso en ejecución debe terminar el árbol y lanzar ProcessCancelled."""
+    job = SubprocessJob()
+
+    def cancel_after_delay() -> None:
+        time.sleep(0.5)
+        job.cancel()
+
+    canceller = threading.Thread(target=cancel_after_delay)
+    canceller.start()
+
+    try:
+        with pytest.raises(ProcessCancelled):
+            job.run([sys.executable, "-u", "-c", "import time; time.sleep(30)"])
+    finally:
+        canceller.join(timeout=5)
+
+    assert not canceller.is_alive()
 
 
 def test_windows_process_options_and_command_format(monkeypatch: pytest.MonkeyPatch) -> None:
